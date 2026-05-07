@@ -6,6 +6,84 @@
 
 const ROOT = () => document.getElementById('app');
 
+const MAX_LANGUAGES = 3;
+
+const COMMON_LANGUAGES = [
+  { code: 'en', name: 'English', native: 'English' },
+  { code: 'ar', name: 'Arabic', native: 'العربية' },
+  { code: 'es', name: 'Spanish', native: 'Español' },
+  { code: 'fr', name: 'French', native: 'Français' },
+  { code: 'de', name: 'German', native: 'Deutsch' },
+  { code: 'zh', name: 'Chinese', native: '中文' },
+  { code: 'ja', name: 'Japanese', native: '日本語' },
+  { code: 'ko', name: 'Korean', native: '한국어' },
+  { code: 'pt', name: 'Portuguese', native: 'Português' },
+  { code: 'ru', name: 'Russian', native: 'Русский' },
+  { code: 'it', name: 'Italian', native: 'Italiano' },
+  { code: 'tr', name: 'Turkish', native: 'Türkçe' },
+  { code: 'hi', name: 'Hindi', native: 'हिन्दी' },
+  { code: 'nl', name: 'Dutch', native: 'Nederlands' },
+  { code: 'pl', name: 'Polish', native: 'Polski' },
+  { code: 'sv', name: 'Swedish', native: 'Svenska' },
+  { code: 'no', name: 'Norwegian', native: 'Norsk' },
+  { code: 'da', name: 'Danish', native: 'Dansk' },
+  { code: 'fi', name: 'Finnish', native: 'Suomi' },
+  { code: 'cs', name: 'Czech', native: 'Čeština' },
+  { code: 'el', name: 'Greek', native: 'Ελληνικά' },
+  { code: 'he', name: 'Hebrew', native: 'עברית' },
+  { code: 'hu', name: 'Hungarian', native: 'Magyar' },
+  { code: 'id', name: 'Indonesian', native: 'Bahasa Indonesia' },
+  { code: 'ms', name: 'Malay', native: 'Bahasa Melayu' },
+  { code: 'ro', name: 'Romanian', native: 'Română' },
+  { code: 'th', name: 'Thai', native: 'ไทย' },
+  { code: 'uk', name: 'Ukrainian', native: 'Українська' },
+  { code: 'vi', name: 'Vietnamese', native: 'Tiếng Việt' },
+  { code: 'bn', name: 'Bengali', native: 'বাংলা' },
+  { code: 'ur', name: 'Urdu', native: 'اردو' },
+  { code: 'fa', name: 'Persian', native: 'فارسی' },
+  { code: 'sw', name: 'Swahili', native: 'Kiswahili' },
+  { code: 'so', name: 'Somali', native: 'Soomaali' },
+  { code: 'am', name: 'Amharic', native: 'አማርኛ' },
+  { code: 'ha', name: 'Hausa', native: 'Hausa' },
+  { code: 'yo', name: 'Yoruba', native: 'Yorùbá' },
+  { code: 'ig', name: 'Igbo', native: 'Igbo' },
+  { code: 'zu', name: 'Zulu', native: 'isiZulu' },
+  { code: 'af', name: 'Afrikaans', native: 'Afrikaans' },
+  { code: 'tl', name: 'Filipino', native: 'Filipino' },
+  { code: 'bg', name: 'Bulgarian', native: 'Български' },
+  { code: 'hr', name: 'Croatian', native: 'Hrvatski' },
+  { code: 'sr', name: 'Serbian', native: 'Српски' },
+  { code: 'sk', name: 'Slovak', native: 'Slovenčina' },
+  { code: 'sl', name: 'Slovenian', native: 'Slovenščina' },
+  { code: 'lt', name: 'Lithuanian', native: 'Lietuvių' },
+  { code: 'lv', name: 'Latvian', native: 'Latviešu' },
+  { code: 'et', name: 'Estonian', native: 'Eesti' },
+  { code: 'is', name: 'Icelandic', native: 'Íslenska' },
+  { code: 'ga', name: 'Irish', native: 'Gaeilge' },
+  { code: 'cy', name: 'Welsh', native: 'Cymraeg' },
+  { code: 'ca', name: 'Catalan', native: 'Català' },
+  { code: 'eu', name: 'Basque', native: 'Euskara' },
+  { code: 'gl', name: 'Galician', native: 'Galego' },
+  { code: 'ta', name: 'Tamil', native: 'தமிழ்' },
+  { code: 'te', name: 'Telugu', native: 'తెలుగు' },
+  { code: 'mr', name: 'Marathi', native: 'मराठी' },
+  { code: 'gu', name: 'Gujarati', native: 'ગુજરાતી' },
+  { code: 'pa', name: 'Punjabi', native: 'ਪੰਜਾਬੀ' },
+  { code: 'kn', name: 'Kannada', native: 'ಕನ್ನಡ' },
+  { code: 'ml', name: 'Malayalam', native: 'മലയാളം' },
+  { code: 'si', name: 'Sinhala', native: 'සිංහල' },
+  { code: 'ne', name: 'Nepali', native: 'नेपाली' },
+  { code: 'my', name: 'Burmese', native: 'မြန်မာ' },
+  { code: 'km', name: 'Khmer', native: 'ខ្មែរ' },
+  { code: 'lo', name: 'Lao', native: 'ລາວ' },
+  { code: 'mn', name: 'Mongolian', native: 'Монгол' },
+  { code: 'ka', name: 'Georgian', native: 'ქართული' },
+  { code: 'hy', name: 'Armenian', native: 'Հայերեն' },
+  { code: 'az', name: 'Azerbaijani', native: 'Azərbaycanca' },
+  { code: 'kk', name: 'Kazakh', native: 'Қазақша' },
+  { code: 'uz', name: 'Uzbek', native: 'Oʻzbekcha' },
+];
+
 /* ═══════════════════════════════════════════════════════════════
    LANDING SCREEN
 ═══════════════════════════════════════════════════════════════ */
@@ -25,7 +103,7 @@ function renderLanding(hasDraft) {
       <!-- Header -->
       <header class="landing-header">
         <div class="brand">
-          <span class="brand-icon">⟨T⟩</span>
+          <span class="brand-icon">{<span class="brand-key">A</span>:<span class="brand-val">文</span>}</span>
           <span class="brand-name">Translate Tool</span>
         </div>
       </header>
@@ -62,7 +140,7 @@ function renderLanding(hasDraft) {
             <button id="btn-upload-trigger" class="btn-primary">
               Choose Files
             </button>
-            <p class="upload-hint">Supports nested JSON · Multiple files · Auto-saved locally</p>
+            <p class="upload-hint">Start with 1–${MAX_LANGUAGES} files · Add more languages later · Auto-saved locally</p>
           </div>
           <div class="drop-overlay" id="drop-overlay">
             <span>Release to upload</span>
@@ -149,13 +227,14 @@ function renderEditor() {
       <!-- Top bar -->
       <div class="editor-topbar">
         <div class="topbar-left">
-          <span class="brand-icon-sm">⟨T⟩</span>
+          <span class="brand-icon-sm">{<span class="brand-key">A</span>:<span class="brand-val">文</span>}</span>
           <div class="file-badges">
             ${fileNames.map(f => `<span class="file-badge">${escapeHTML(f)}</span>`).join('')}
           </div>
         </div>
         <div class="topbar-right">
           <div id="save-status" class="save-status"></div>
+          ${fileNames.length < MAX_LANGUAGES ? `<button id="btn-add-language" class="btn-ghost btn-ghost-amber" title="Add another language">+ Add Language</button>` : ''}
           <button id="btn-upload-new" class="btn-ghost" title="Upload new files">↑ Upload New</button>
         </div>
       </div>
@@ -227,7 +306,7 @@ function renderEditor() {
 
     <!-- Modal overlay -->
     <div id="modal-overlay" class="modal-overlay" style="display:none">
-      <div id="modal-box" class="modal-box" onclick="event.stopPropagation()"></div>
+      <div id="modal-box" class="modal-box"></div>
     </div>
   `;
 
@@ -689,4 +768,143 @@ function setModalContent(html, boxClass = 'modal-box') {
     box.className = boxClass;
     box.innerHTML = html;
   }
+}
+
+/* ─── Add language modal ─────────────────────────────────────── */
+
+function showAddLanguageModal() {
+  const fileNames = state.draft?.metadata?.fileNames || [];
+  if (fileNames.length >= MAX_LANGUAGES) {
+    showToast(`Maximum ${MAX_LANGUAGES} languages reached`, 'warning');
+    return;
+  }
+
+  setModalContent(`
+    <div class="modal-header">
+      <h3 class="modal-title">Add Language</h3>
+      <button data-modal-close class="modal-close">×</button>
+    </div>
+    <div class="modal-body modal-body-lang">
+      <p class="confirm-message lang-intro">A new blank JSON will be created with the same key structure, ready to translate and download.</p>
+
+      <div class="lang-search-wrap">
+        <span class="search-icon">⌕</span>
+        <input
+          id="lang-search-input"
+          type="text"
+          class="lang-search-input"
+          placeholder="Search language (e.g. som → Somali) or type a filename like fr-CA.json"
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <button id="btn-add-custom-lang" class="btn-primary lang-add-custom-btn" style="display:none">Add</button>
+      </div>
+
+      <div id="lang-grid" class="lang-grid"></div>
+      <div id="lang-empty" class="lang-empty" style="display:none">
+        No language matches. Press <strong>Enter</strong> to add it as a custom filename.
+      </div>
+    </div>
+  `, 'modal-box modal-box-wide');
+  openModal();
+
+  // Initial render and wire up live search
+  renderLangGrid('');
+
+  setTimeout(() => {
+    const input = document.getElementById('lang-search-input');
+    if (!input) return;
+    input.focus();
+
+    input.addEventListener('input', () => {
+      renderLangGrid(input.value);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleLangSearchEnter(input.value);
+      }
+    });
+  }, 0);
+}
+
+/**
+ * Render the filtered grid of language options.
+ * @param {string} query
+ */
+function renderLangGrid(query) {
+  const grid = document.getElementById('lang-grid');
+  const emptyEl = document.getElementById('lang-empty');
+  const customBtn = document.getElementById('btn-add-custom-lang');
+  if (!grid) return;
+
+  const fileNames = state.draft?.metadata?.fileNames || [];
+  const used = new Set(fileNames.map(n => n.toLowerCase()));
+  const q = query.trim().toLowerCase();
+
+  const filtered = q
+    ? COMMON_LANGUAGES.filter(l =>
+        l.code.toLowerCase().startsWith(q) ||
+        l.name.toLowerCase().includes(q) ||
+        l.native.toLowerCase().includes(q)
+      )
+    : COMMON_LANGUAGES;
+
+  // Show "Add custom" button when input doesn't match an exact code
+  if (customBtn) {
+    const exactCodeMatch = COMMON_LANGUAGES.some(l => l.code === q);
+    customBtn.style.display = q && !exactCodeMatch ? '' : 'none';
+    customBtn.textContent = q.endsWith('.json') ? `Add ${q}` : `Add ${q}.json`;
+  }
+
+  if (filtered.length === 0) {
+    grid.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  grid.innerHTML = filtered.map(l => {
+    const fname = `${l.code}.json`;
+    const isUsed = used.has(fname);
+    return `
+      <button class="lang-option ${isUsed ? 'lang-option-disabled' : ''}" ${isUsed ? 'disabled' : ''} data-add-lang="${escapeHTML(fname)}">
+        <span class="lang-code">${escapeHTML(l.code)}</span>
+        <div class="lang-meta">
+          <strong>${escapeHTML(l.name)}</strong>
+          <span>${escapeHTML(l.native)} · ${escapeHTML(fname)}${isUsed ? ' · added' : ''}</span>
+        </div>
+      </button>
+    `;
+  }).join('');
+}
+
+/**
+ * Handle Enter key in language search input.
+ * If query matches one available (non-disabled) language, add it.
+ * Otherwise, treat the query as a custom filename.
+ */
+function handleLangSearchEnter(rawQuery) {
+  const q = rawQuery.trim();
+  if (!q) return;
+
+  const fileNames = state.draft?.metadata?.fileNames || [];
+  const used = new Set(fileNames.map(n => n.toLowerCase()));
+  const lower = q.toLowerCase();
+
+  const matches = COMMON_LANGUAGES.filter(l =>
+    l.code.toLowerCase().startsWith(lower) ||
+    l.name.toLowerCase().includes(lower) ||
+    l.native.toLowerCase().includes(lower)
+  ).filter(l => !used.has(`${l.code}.json`));
+
+  // Single match — auto-pick it
+  if (matches.length === 1) {
+    addLanguageFile(`${matches[0].code}.json`);
+    return;
+  }
+
+  // Otherwise, treat as a custom filename
+  addLanguageFile(q);
 }

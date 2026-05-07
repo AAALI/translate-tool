@@ -87,6 +87,70 @@ function transitionToLanding(keepDraft = false) {
   renderLanding(hasDraftNow);
 }
 
+/* ─── Add language ─────────────────────────────────────────────────── */
+
+/**
+ * Build an empty skeleton (same nested structure, all leaf values = "")
+ * from the union of keys across all currently loaded files.
+ */
+function buildEmptySkeleton() {
+  if (!state.draft) return {};
+  const fileNames = state.draft.metadata.fileNames;
+  const merged = {};
+  for (const fname of fileNames) {
+    const flat = flattenJSON(state.draft.files[fname]?.original || {});
+    for (const k of Object.keys(flat)) {
+      if (!(k in merged)) merged[k] = '';
+    }
+  }
+  return unflattenJSON(merged);
+}
+
+/**
+ * Add a new (blank) language file to the current draft.
+ * Pre-populates the structure with empty strings so the downloaded JSON
+ * matches the existing file's shape.
+ * @param {string} filename  e.g. "fr.json"
+ */
+function addLanguageFile(filename) {
+  if (!state.draft) return;
+  if (!filename || typeof filename !== 'string') return;
+
+  filename = filename.trim();
+  if (!/\.json$/i.test(filename)) filename += '.json';
+  if (!/^[a-zA-Z0-9._\-]+$/.test(filename.replace(/\.json$/i, ''))) {
+    showToast('Filename must contain only letters, numbers, dots, dashes, or underscores', 'error');
+    return;
+  }
+
+  if (state.draft.metadata.fileNames.length >= MAX_LANGUAGES) {
+    showToast(`Maximum ${MAX_LANGUAGES} languages reached`, 'warning');
+    return;
+  }
+  if (state.draft.files[filename]) {
+    showToast(`${filename} already exists`, 'error');
+    return;
+  }
+
+  const skeleton = buildEmptySkeleton();
+  state.draft.files[filename] = {
+    original: JSON.parse(JSON.stringify(skeleton)),
+    current:  JSON.parse(JSON.stringify(skeleton)),
+    hasChanges: false,
+    changeLog: [],
+  };
+  state.draft.metadata.fileNames.push(filename);
+  state.draft.metadata.lastModifiedAt = new Date().toISOString();
+
+  const ok = saveDraft(state.draft);
+  if (!ok) return;
+  state.lastSavedAt = new Date().toISOString();
+
+  closeModal();
+  renderEditor();
+  showToast(`Added ${filename} — fill in the empty cells`, 'success');
+}
+
 /* ─── Flat data helpers ────────────────────────────────────────────── */
 
 /**
@@ -240,6 +304,32 @@ document.addEventListener('click', (e) => {
     return;
   }
 
+  // Editor: add language
+  if (t.matches('#btn-add-language') || t.closest('#btn-add-language')) {
+    if (activeCell) closeCellEditor(true);
+    showAddLanguageModal();
+    return;
+  }
+
+  // Add language: pick from common list
+  if (t.matches('[data-add-lang]') || t.closest('[data-add-lang]')) {
+    const el = t.matches('[data-add-lang]') ? t : t.closest('[data-add-lang]');
+    if (!el.disabled) addLanguageFile(el.dataset.addLang);
+    return;
+  }
+
+  // Add language: custom filename from search input
+  if (t.matches('#btn-add-custom-lang') || t.closest('#btn-add-custom-lang')) {
+    const input = document.getElementById('lang-search-input');
+    const raw = (input?.value || '').trim();
+    if (!raw) {
+      showToast('Type a filename or language name', 'warning');
+      return;
+    }
+    addLanguageFile(raw);
+    return;
+  }
+
   // Editor: upload new
   if (t.matches('#btn-upload-new') || t.closest('#btn-upload-new')) {
     if (activeCell) closeCellEditor(true);
@@ -311,7 +401,12 @@ async function handleFileInputChange(files) {
   const parsed = [];
   const errors = [];
 
-  for (const file of files) {
+  const fileArr = Array.from(files);
+  if (fileArr.length > MAX_LANGUAGES) {
+    showToast(`Only the first ${MAX_LANGUAGES} files were loaded (max ${MAX_LANGUAGES} languages).`, 'warning', 5000);
+  }
+
+  for (const file of fileArr.slice(0, MAX_LANGUAGES)) {
     if (!file.name.endsWith('.json')) {
       errors.push(`${file.name}: not a JSON file`);
       continue;
