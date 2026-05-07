@@ -26,8 +26,7 @@ function renderLanding(hasDraft) {
       <header class="landing-header">
         <div class="brand">
           <span class="brand-icon">⟨T⟩</span>
-          <span class="brand-name">Tabadulat</span>
-          <span class="brand-sub">Translation Editor</span>
+          <span class="brand-name">Translate Tool</span>
         </div>
       </header>
 

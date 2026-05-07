@@ -1,4 +1,4 @@
-# Tabadulat Translation Editor
+# Translate Tool
 
 A lightweight, in-browser JSON translation editor with auto-save and draft recovery. No backend, no build step — runs entirely in the browser.
 
@@ -33,7 +33,7 @@ If you close the browser mid-session, the next time you open the app you'll see 
 ### Option A: New repo
 
 ```bash
-# Create a new GitHub repo named: tabadulat-translation-editor
+# Create a new GitHub repo named: translate-tool
 # Clone it locally, copy these files in, then:
 
 git add .
@@ -45,7 +45,7 @@ Then go to **Settings → Pages → Source → Deploy from branch → main → /
 
 Your app will be live at:
 ```
-https://YOUR-USERNAME.github.io/tabadulat-translation-editor/
+https://YOUR-USERNAME.github.io/translate-tool/
 ```
 
 ### Option B: Existing repo
@@ -55,14 +55,14 @@ Copy these files into the root of your repo (or a `/docs` folder), then enable G
 ### Option C: One-command deploy with `gh`
 
 ```bash
-gh repo create tabadulat-translation-editor --public --source=. --push
+gh repo create translate-tool --public --source=. --push
 # Then enable Pages in GitHub Settings UI
 ```
 
 ## File Structure
 
 ```
-tabadulat-translation-editor/
+translate-tool/
 ├── index.html        ← entry point
 ├── css/
 │   └── styles.css    ← all styles (no Tailwind dependency)
