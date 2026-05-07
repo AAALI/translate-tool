@@ -143,13 +143,17 @@ function initDropZone() {
  * Render the full editor screen (shell + body).
  */
 function renderEditor() {
+  const fileNames = state.draft?.metadata?.fileNames || [];
+
   ROOT().innerHTML = `
     <div class="editor-root">
       <!-- Top bar -->
       <div class="editor-topbar">
         <div class="topbar-left">
           <span class="brand-icon-sm">⟨T⟩</span>
-          <div id="file-tabs" class="file-tabs"></div>
+          <div class="file-badges">
+            ${fileNames.map(f => `<span class="file-badge">${escapeHTML(f)}</span>`).join('')}
+          </div>
         </div>
         <div class="topbar-right">
           <div id="save-status" class="save-status"></div>
@@ -195,17 +199,9 @@ function renderEditor() {
       <!-- Table area -->
       <div class="editor-table-wrap" id="table-wrap">
         <table class="editor-table" id="editor-table">
-          <colgroup>
-            <col class="col-key">
-            <col class="col-source">
-            <col class="col-target">
-          </colgroup>
+          ${buildColgroup(fileNames)}
           <thead class="table-head">
-            <tr>
-              <th class="th-key">Key Path</th>
-              <th class="th-source" id="th-source">Source</th>
-              <th class="th-target" id="th-target">Translation <span class="th-edit-hint">← click to edit</span></th>
-            </tr>
+            <tr>${buildHeaderRow(fileNames)}</tr>
           </thead>
           <tbody id="table-body"></tbody>
         </table>
@@ -236,51 +232,51 @@ function renderEditor() {
     </div>
   `;
 
-  renderFileTabs();
   renderFilterPills();
   renderProgressBar();
   renderChangeCount();
   updateSaveStatus('saved');
   renderEditorBody();
-  updateColumnHeaders();
 }
+
+/* ─── Dynamic column layout helpers ─────────────────────────────── */
 
 /**
- * Update source/target column headers based on the current file.
+ * Calculate column widths based on number of files.
+ * Returns array of widths in %: [keyWidth, file1Width, file2Width, ...]
  */
-function updateColumnHeaders() {
-  if (!state.draft || !state.currentFile) return;
-  const src = document.getElementById('th-source');
-  const tgt = document.getElementById('th-target');
-  if (src) src.textContent = 'Original';
-  if (tgt) {
-    tgt.innerHTML = `${escapeHTML(state.currentFile)} <span class="th-edit-hint">← click to edit</span>`;
+function getColumnWidths(fileNames) {
+  const n = fileNames.length;
+  if (n === 0) return [30, 70];
+  // Key column: 22–28%, remaining split equally among file columns
+  const keyPct = n >= 3 ? 20 : n === 2 ? 24 : 28;
+  const remaining = 100 - keyPct;
+  const perFile = Math.floor(remaining / n);
+  const widths = [keyPct];
+  for (let i = 0; i < n; i++) {
+    // Give last column any rounding remainder
+    widths.push(i === n - 1 ? remaining - perFile * (n - 1) : perFile);
   }
+  return widths;
 }
 
-/* ─── File tabs ──────────────────────────────────────────────── */
+function buildColgroup(fileNames) {
+  const widths = getColumnWidths(fileNames);
+  const cols = widths.map(w => `<col style="width:${w}%">`).join('');
+  return `<colgroup>${cols}</colgroup>`;
+}
 
-function renderFileTabs() {
-  const container = document.getElementById('file-tabs');
-  if (!container || !state.draft) return;
-
-  const files = state.draft.metadata.fileNames;
-  if (files.length <= 1) {
-    container.innerHTML = `<span class="single-file-name">${escapeHTML(state.currentFile || '')}</span>`;
-    return;
-  }
-
-  container.innerHTML = files.map(fname => {
-    const active = fname === state.currentFile;
-    const hasChanges = state.draft.files[fname]?.hasChanges;
-    return `
-      <button class="file-tab ${active ? 'file-tab-active' : ''}" data-tab-file="${escapeHTML(fname)}" title="${escapeHTML(fname)}">
-        ${escapeHTML(fname)}
-        ${hasChanges ? '<span class="tab-dot">●</span>' : ''}
-      </button>
-    `;
+function buildHeaderRow(fileNames) {
+  const keyTh = `<th class="th-key">Key Path</th>`;
+  const fileThs = fileNames.map((fname, i) => {
+    const hint = i === fileNames.length - 1
+      ? ` <span class="th-edit-hint">← click to edit</span>`
+      : '';
+    return `<th class="th-file">${escapeHTML(fname)}${hint}</th>`;
   }).join('');
+  return keyTh + fileThs;
 }
+
 
 /* ─── Filter pills ───────────────────────────────────────────── */
 
@@ -304,16 +300,12 @@ function renderFilterPills() {
 
 /* ─── Table body (virtualized for performance) ───────────────── */
 
-const VIRTUAL_BATCH = 80;       // rows rendered per paint
-const VIRTUAL_OVERSCAN = 20;    // extra rows beyond viewport
+const VIRTUAL_BATCH = 80;
+const VIRTUAL_OVERSCAN = 20;
 
 let _allRows = [];
 let _renderOffset = 0;
 
-/**
- * Render (or re-render) the table body with the current filtered rows.
- * Uses a simple infinite-scroll virtualization for 600+ key performance.
- */
 function renderEditorBody() {
   const tbody = document.getElementById('table-body');
   const emptyState = document.getElementById('empty-state');
@@ -337,18 +329,14 @@ function renderEditorBody() {
   tbody.innerHTML = _allRows.slice(0, initialBatch).map(renderRow).join('');
   _renderOffset = initialBatch;
 
-  // Attach scroll listener for lazy rendering
   const wrap = document.getElementById('table-wrap');
-  if (wrap) {
-    wrap.onscroll = () => lazyRenderRows(tbody);
-  }
+  if (wrap) wrap.onscroll = () => lazyRenderRows(tbody);
 }
 
 function lazyRenderRows(tbody) {
   if (_renderOffset >= _allRows.length) return;
   const wrap = document.getElementById('table-wrap');
   if (!wrap) return;
-
   const { scrollTop, clientHeight, scrollHeight } = wrap;
   if (scrollTop + clientHeight >= scrollHeight - 200) {
     const nextBatch = Math.min(_renderOffset + VIRTUAL_BATCH, _allRows.length);
@@ -364,50 +352,51 @@ function lazyRenderRows(tbody) {
   }
 }
 
-/**
- * Render a single table row HTML string.
- */
 function renderRow(row) {
   return `<tr class="table-row">${renderRowCells(row)}</tr>`;
 }
 
+/**
+ * Render cells for one row. Each file gets its own <td>.
+ * Row shape: { key, values: { fname: { original, current, changed, empty } } }
+ */
 function renderRowCells(row) {
-  const { key, originalValue, currentValue, changed, empty } = row;
-  const fname = state.currentFile;
-  const rtlCurrent = isRTL(String(currentValue || '')) || isRTL(String(originalValue || ''));
-  const rtlOriginal = isRTL(String(originalValue || ''));
+  const { key, values } = row;
+  const fileNames = state.draft?.metadata?.fileNames || [];
 
-  const displayCurrent = currentValue !== undefined && currentValue !== null ? String(currentValue) : '';
-  const displayOriginal = originalValue !== undefined && originalValue !== null ? String(originalValue) : '';
-
-  const targetClasses = [
-    'cell-target',
-    'px-3 py-2 cursor-pointer transition-colors',
-    changed ? 'cell-changed' : '',
-    empty ? 'cell-empty' : '',
-  ].filter(Boolean).join(' ');
-
-  const changeBadge = changed ? `<span class="cell-badge-changed" title="Modified">●</span>` : '';
-  const targetContent = empty
-    ? `<span class="cell-placeholder">Click to translate…</span>`
-    : `${changeBadge}${escapeHTML(displayCurrent)}`;
-
-  // Key path segments for visual hierarchy
+  // Key path with visual hierarchy
   const keyParts = key.split('.');
   const keyDisplay = keyParts.length > 1
     ? `<span class="key-prefix">${escapeHTML(keyParts.slice(0, -1).join('.'))}.</span><span class="key-leaf">${escapeHTML(keyParts[keyParts.length - 1])}</span>`
     : `<span class="key-leaf">${escapeHTML(key)}</span>`;
+  const keyCell = `<td class="cell-key" title="${escapeHTML(key)}">${keyDisplay}</td>`;
 
-  return `
-    <td class="cell-key" title="${escapeHTML(key)}">${keyDisplay}</td>
-    <td class="cell-source" dir="${rtlOriginal ? 'rtl' : 'ltr'}">${escapeHTML(displayOriginal) || '<span class="cell-placeholder">—</span>'}</td>
-    <td
-      class="${targetClasses}"
+  const fileCells = fileNames.map((fname, idx) => {
+    const v = values[fname] || {};
+    const { current, original, changed, empty } = v;
+    const displayVal = current !== undefined && current !== null ? String(current) : '';
+    const rtl = isRTL(displayVal) || isRTL(String(original || ''));
+
+    const classes = [
+      'cell-target',
+      changed ? 'cell-changed' : '',
+      empty    ? 'cell-empty'   : '',
+    ].filter(Boolean).join(' ');
+
+    const badge = changed ? `<span class="cell-badge-changed" title="Modified">●</span>` : '';
+    const content = empty
+      ? `<span class="cell-placeholder">Click to translate…</span>`
+      : `${badge}${escapeHTML(displayVal)}`;
+
+    return `<td
+      class="${classes}"
       data-cell-key="${escapeHTML(key)}"
       data-cell-file="${escapeHTML(fname)}"
-      dir="${rtlCurrent ? 'rtl' : 'ltr'}"
-    >${targetContent}</td>
-  `;
+      dir="${rtl ? 'rtl' : 'ltr'}"
+    >${content}</td>`;
+  }).join('');
+
+  return keyCell + fileCells;
 }
 
 /* ─── Progress bar ───────────────────────────────────────────── */
@@ -415,35 +404,34 @@ function renderRowCells(row) {
 function renderProgressBar() {
   const bar = document.getElementById('progress-bar');
   const label = document.getElementById('progress-label');
-  if (!bar || !state.draft || !state.currentFile) return;
+  if (!bar || !state.draft) return;
 
-  const currentFlat = flattenJSON(state.draft.files[state.currentFile]?.current || {});
-  const originalFlat = flattenJSON(state.draft.files[state.currentFile]?.original || {});
-  const total = Object.keys(originalFlat).length;
-  const filled = Object.values(currentFlat).filter(v => v !== '' && v !== null && v !== undefined).length;
+  const fileNames = state.draft.metadata.fileNames;
+  let total = 0, filled = 0;
+  for (const fname of fileNames) {
+    const originalFlat = flattenJSON(state.draft.files[fname]?.original || {});
+    const currentFlat  = flattenJSON(state.draft.files[fname]?.current  || {});
+    total  += Object.keys(originalFlat).length;
+    filled += Object.values(currentFlat).filter(v => v !== '' && v !== null && v !== undefined).length;
+  }
   const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
 
   bar.style.width = `${pct}%`;
-  if (label) label.textContent = `${filled}/${total} keys (${pct}%)`;
+  if (label) label.textContent = `${filled}/${total} cells (${pct}%)`;
 }
 
-function updateProgressBar() {
-  renderProgressBar();
-}
+function updateProgressBar() { renderProgressBar(); }
 
 /* ─── Change count ───────────────────────────────────────────── */
 
 function renderChangeCount() {
   const el = document.getElementById('change-count');
-  if (!el || !state.draft || !state.currentFile) return;
-  const count = state.draft.files[state.currentFile]?.changeLog?.length || 0;
-  el.textContent = count > 0 ? `${count} key${count !== 1 ? 's' : ''} modified` : 'No changes yet';
+  if (!el || !state.draft) return;
+  const count = getTotalChanges();
+  el.textContent = count > 0 ? `${count} edit${count !== 1 ? 's' : ''} made` : 'No changes yet';
 }
 
-function updateChangeCount() {
-  renderChangeCount();
-  renderFileTabs(); // refresh tab dots
-}
+function updateChangeCount() { renderChangeCount(); }
 
 function getTotalChanges() {
   if (!state.draft) return 0;
@@ -546,7 +534,26 @@ function showToast(message, type = 'info', duration = TOAST_DURATION) {
 function showDownloadModal() {
   const files = state.draft?.metadata?.fileNames || [];
   const multiFile = files.length > 1;
-  const currentFile = state.currentFile;
+
+  const indivOptions = files.map(fname => `
+    <button class="download-option" data-download-action="${escapeHTML(fname)}">
+      <span class="download-option-icon">↓</span>
+      <div>
+        <strong>${escapeHTML(fname)}</strong>
+        <span>Download as JSON</span>
+      </div>
+    </button>
+  `).join('');
+
+  const clipOptions = files.map(fname => `
+    <button class="download-option" data-copy-file="${escapeHTML(fname)}">
+      <span class="download-option-icon">⎘</span>
+      <div>
+        <strong>Copy ${escapeHTML(fname)}</strong>
+        <span>Paste into GitHub editor or any text editor</span>
+      </div>
+    </button>
+  `).join('');
 
   setModalContent(`
     <div class="modal-header">
@@ -556,36 +563,17 @@ function showDownloadModal() {
     <div class="modal-body">
       <div class="download-options">
         ${multiFile ? `
-        <button class="download-option" data-download-action="current">
-          <span class="download-option-icon">↓</span>
-          <div>
-            <strong>Current file</strong>
-            <span>${escapeHTML(currentFile)}</span>
-          </div>
-        </button>
-        <button class="download-option" data-download-action="all">
+        <button class="download-option download-option-primary" data-download-action="all">
           <span class="download-option-icon">⬡</span>
           <div>
-            <strong>All files (ZIP)</strong>
-            <span>${files.map(escapeHTML).join(', ')}</span>
+            <strong>Download all as ZIP</strong>
+            <span>${files.map(escapeHTML).join(' + ')}</span>
           </div>
         </button>
-        ` : `
-        <button class="download-option" data-download-action="all">
-          <span class="download-option-icon">↓</span>
-          <div>
-            <strong>Download</strong>
-            <span>${escapeHTML(currentFile)}</span>
-          </div>
-        </button>
-        `}
-        <button class="download-option" id="btn-copy-clipboard">
-          <span class="download-option-icon">⎘</span>
-          <div>
-            <strong>Copy to clipboard</strong>
-            <span>Paste into GitHub editor or any text editor</span>
-          </div>
-        </button>
+        <div class="download-section-label">Or download individually</div>
+        ${indivOptions}
+        ` : indivOptions}
+        ${clipOptions}
       </div>
       <div class="modal-storage-info">
         ${getStorageInfoHTML()}
@@ -603,49 +591,54 @@ function getStorageInfoHTML() {
 /* ─── Diff modal ─────────────────────────────────────────────── */
 
 function renderDiffModal() {
-  const changes = getDiffChanges();
+  const allChanges = getDiffChanges();
+  const total = getTotalDiffCount();
 
-  if (changes.length === 0) {
+  if (total === 0) {
     showToast('No changes to diff yet', 'info');
     return;
   }
 
-  const rows = changes.map(({ key, oldVal, newVal, timestamp }) => {
-    const timeStr = timestamp ? formatTimestamp(timestamp) : '';
-    const rtlOld = isRTL(String(oldVal || ''));
-    const rtlNew = isRTL(String(newVal || ''));
+  const sections = allChanges.map(({ filename, changes }) => {
+    if (changes.length === 0) return '';
+    const rows = changes.map(({ key, oldVal, newVal, timestamp }) => {
+      const timeStr = timestamp ? formatTimestamp(timestamp) : '';
+      const rtlOld = isRTL(String(oldVal || ''));
+      const rtlNew = isRTL(String(newVal || ''));
+      return `
+        <tr class="diff-row">
+          <td class="diff-key" title="${escapeHTML(key)}">${escapeHTML(key)}</td>
+          <td class="diff-old" dir="${rtlOld ? 'rtl' : 'ltr'}">${escapeHTML(String(oldVal ?? '_(empty)_'))}</td>
+          <td class="diff-new" dir="${rtlNew ? 'rtl' : 'ltr'}">${escapeHTML(String(newVal ?? '_(empty)_'))}</td>
+          <td class="diff-time">${escapeHTML(timeStr)}</td>
+        </tr>`;
+    }).join('');
+
     return `
-      <tr class="diff-row">
-        <td class="diff-key" title="${escapeHTML(key)}">${escapeHTML(key)}</td>
-        <td class="diff-old" dir="${rtlOld ? 'rtl' : 'ltr'}">${escapeHTML(String(oldVal ?? '_(empty)_'))}</td>
-        <td class="diff-new" dir="${rtlNew ? 'rtl' : 'ltr'}">${escapeHTML(String(newVal ?? '_(empty)_'))}</td>
-        <td class="diff-time">${escapeHTML(timeStr)}</td>
-      </tr>
-    `;
+      <div class="diff-section">
+        <div class="diff-section-header">
+          <span class="diff-section-file">${escapeHTML(filename)}</span>
+          <span class="diff-count">${changes.length}</span>
+        </div>
+        <table class="diff-table">
+          <thead><tr>
+            <th>Key</th><th>Before</th><th>After</th><th>Time</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
   }).join('');
 
   setModalContent(`
     <div class="modal-header">
-      <h3 class="modal-title">Changes in <code>${escapeHTML(state.currentFile)}</code> <span class="diff-count">${changes.length}</span></h3>
+      <h3 class="modal-title">All Changes <span class="diff-count">${total}</span></h3>
       <div class="modal-header-actions">
         <button id="btn-copy-diff" class="btn-ghost">⎘ Copy as Markdown</button>
         <button data-modal-close class="modal-close">×</button>
       </div>
     </div>
     <div class="modal-body modal-body-diff">
-      <div class="diff-table-wrap">
-        <table class="diff-table">
-          <thead>
-            <tr>
-              <th>Key</th>
-              <th>Before</th>
-              <th>After</th>
-              <th>Time</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
+      ${sections}
     </div>
   `, 'modal-box modal-box-wide');
   openModal();

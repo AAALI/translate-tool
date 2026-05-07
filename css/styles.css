@@ -354,48 +354,25 @@ body::after {
   gap: 12px;
 }
 
-/* File tabs */
-.file-tabs {
+/* File badges (replaces tabs) */
+.file-badges {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
-.file-tab {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  border: none;
-  background: transparent;
-  color: rgba(245,240,232,0.5);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  cursor: pointer;
+.file-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: rgba(245,240,232,0.55);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: var(--radius-sm);
-  transition: all var(--transition);
+  padding: 3px 8px;
   white-space: nowrap;
-  max-width: 160px;
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.file-tab:hover { background: rgba(255,255,255,0.06); color: var(--cream); }
-
-.file-tab-active {
-  background: rgba(200,121,26,0.2) !important;
-  color: var(--amber-lt) !important;
-}
-
-.tab-dot {
-  font-size: 8px;
-  color: var(--amber-lt);
-}
-
-.single-file-name {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: rgba(245,240,232,0.6);
 }
 
 /* Save status */
@@ -591,9 +568,7 @@ body::after {
   table-layout: fixed;
 }
 
-.col-key    { width: 28%; }
-.col-source { width: 30%; }
-.col-target { width: 42%; }
+/* Column widths are set dynamically via inline styles in buildColgroup() */
 
 .table-head {
   position: sticky;
@@ -615,6 +590,10 @@ body::after {
 }
 
 .table-head th:last-child { border-right: none; }
+
+.th-file {
+  /* same styling as other ths — inherited */
+}
 
 .th-edit-hint {
   font-weight: 300;
@@ -655,18 +634,7 @@ body::after {
   font-weight: 500;
 }
 
-/* Source cell */
-.cell-source {
-  padding: 8px 12px;
-  font-size: 13px;
-  color: var(--charcoal-lt);
-  border-right: 1px solid var(--cream-border);
-  vertical-align: top;
-  word-break: break-word;
-  line-height: 1.5;
-}
-
-/* Target cell */
+/* File cell (all file columns share this base via cell-target) */
 .cell-target {
   padding: 8px 12px;
   font-size: 13px;
@@ -1026,6 +994,19 @@ body::after {
   color: var(--charcoal-lt);
 }
 
+.download-option-primary {
+  border-color: var(--amber);
+  background: var(--amber-bg);
+}
+
+.download-section-label {
+  font-size: 11px;
+  color: var(--charcoal-lt);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 8px 2px 4px;
+}
+
 /* Confirm dialog */
 .confirm-message {
   font-size: 14px;
@@ -1038,6 +1019,30 @@ body::after {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+/* Diff sections */
+.diff-section {
+  margin-bottom: 0;
+}
+
+.diff-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--cream-dark);
+  border-bottom: 1px solid var(--cream-border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.diff-section-file {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--charcoal);
 }
 
 /* Diff table */
@@ -1122,23 +1127,11 @@ body::after {
 ═══════════════════════════════════════════════════════════ */
 
 @media (max-width: 640px) {
-  .col-key    { width: 35%; }
-  .col-source { display: none; }
-  .col-target { width: 65%; }
-
-  .th-source { display: none; }
-
-  .search-input { width: 160px; }
-  .progress-bar-wrap { width: 100px; }
+  .search-input { width: 140px; }
+  .progress-bar-wrap { width: 80px; }
   .editor-metabar { flex-wrap: wrap; }
   .metabar-right { gap: 8px; }
-
   .modal-box-wide { max-width: 95vw; }
-}
-
-@media (max-width: 860px) and (min-width: 641px) {
-  .col-key    { width: 32%; }
-  .col-source { width: 25%; }
-  .col-target { width: 43%; }
-  .search-input { width: 180px; }
+  .file-badge { display: none; }
+  .file-badge:first-child { display: inline; }
 }

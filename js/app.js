@@ -6,12 +6,10 @@
 const state = {
   screen: 'landing',       // 'landing' | 'editor'
   draft: null,             // the full draft object
-  currentFile: null,       // currently selected file name
   searchQuery: '',         // search input value
   activeFilter: 'all',     // 'all' | 'empty' | 'changed' | 'unchanged'
   undoStack: [],           // [{filename, key, oldValue, newValue}]
   lastSavedAt: null,       // ISO timestamp of last localStorage save
-  flatCache: {},           // { filename: {key: value} } flattened current
 };
 
 /* ─── Bootstrap ───────────────────────────────────────────────────── */
@@ -50,16 +48,9 @@ document.addEventListener('DOMContentLoaded', () => {
 function loadFiles(files) {
   const draft = createDraft(files);
   state.draft = draft;
-  state.currentFile = files[0].name;
   state.undoStack = [];
   state.searchQuery = '';
   state.activeFilter = 'all';
-  state.flatCache = {};
-
-  // Build flat cache for all files
-  for (const f of files) {
-    state.flatCache[f.name] = flattenJSON(f.data);
-  }
 
   const ok = saveDraft(draft);
   if (!ok) return; // storage-full event fires automatically
@@ -73,14 +64,7 @@ function loadFiles(files) {
  */
 function restoreDraft() {
   if (!state.draft) return;
-  state.currentFile = state.draft.metadata.fileNames[0];
   state.undoStack = [];
-  state.flatCache = {};
-
-  for (const fname of state.draft.metadata.fileNames) {
-    state.flatCache[fname] = flattenJSON(state.draft.files[fname].current);
-  }
-
   state.lastSavedAt = state.draft.metadata.lastModifiedAt;
   transitionToEditor();
 }
@@ -97,77 +81,91 @@ function transitionToLanding(keepDraft = false) {
   stopPeriodicSave();
   if (!keepDraft) {
     state.draft = null;
-    state.currentFile = null;
     state.undoStack = [];
-    state.flatCache = {};
   }
   const hasDraftNow = keepDraft && state.draft !== null;
   renderLanding(hasDraftNow);
 }
 
-/* ─── Flat cache helpers ───────────────────────────────────────────── */
+/* ─── Flat data helpers ────────────────────────────────────────────── */
 
 /**
- * Get the flat key→value map for the current file's *current* state.
+ * Build flat {key→value} maps for all files (current + original).
+ * Returns { flatCurrents: {fname: {key: val}}, flatOriginals: {fname: {key: val}} }
  */
-function getCurrentFlat() {
-  if (!state.draft || !state.currentFile) return {};
-  const fileData = state.draft.files[state.currentFile];
-  if (!fileData) return {};
-  // Always re-derive from current (cache may be stale after edits)
-  return flattenJSON(fileData.current);
+function buildFlatMaps() {
+  const fileNames = state.draft?.metadata?.fileNames || [];
+  const flatCurrents = {};
+  const flatOriginals = {};
+  for (const fname of fileNames) {
+    const fileData = state.draft.files[fname];
+    if (!fileData) continue;
+    flatCurrents[fname]  = flattenJSON(fileData.current  || {});
+    flatOriginals[fname] = flattenJSON(fileData.original || {});
+  }
+  return { flatCurrents, flatOriginals };
 }
 
 /**
- * Get the flat key→value map for the current file's *original* state.
+ * Get the union of all keys across all loaded files.
  */
-function getOriginalFlat() {
-  if (!state.draft || !state.currentFile) return {};
-  const fileData = state.draft.files[state.currentFile];
-  if (!fileData) return {};
-  return flattenJSON(fileData.original);
+function getAllKeys() {
+  const fileNames = state.draft?.metadata?.fileNames || [];
+  const keySet = new Set();
+  for (const fname of fileNames) {
+    const original = state.draft?.files[fname]?.original || {};
+    for (const k of Object.keys(flattenJSON(original))) keySet.add(k);
+  }
+  return [...keySet];
 }
 
 /* ─── Filtered row list ────────────────────────────────────────────── */
 
 /**
  * Return the list of visible rows after applying search + filter.
- * Each row: { key, originalValue, currentValue, changed, empty }
+ * Each row: { key, values: { fname: { original, current, changed, empty } } }
  */
 function getFilteredRows() {
-  const currentFlat = getCurrentFlat();
-  const originalFlat = getOriginalFlat();
-  const allKeys = Object.keys(originalFlat);
-
+  if (!state.draft) return [];
+  const fileNames = state.draft.metadata.fileNames;
+  const { flatCurrents, flatOriginals } = buildFlatMaps();
+  const allKeys = getAllKeys();
   const q = state.searchQuery.toLowerCase().trim();
 
   return allKeys.filter(key => {
-    const current = currentFlat[key];
-    const original = originalFlat[key];
-    const changed = String(current) !== String(original);
-    const empty = !current && current !== 0;
+    // Per-file predicates
+    const anyEmpty   = fileNames.some(f => { const v = flatCurrents[f]?.[key]; return !v && v !== 0; });
+    const anyChanged = fileNames.some(f => String(flatCurrents[f]?.[key]) !== String(flatOriginals[f]?.[key]));
 
-    // Filter
-    if (state.activeFilter === 'empty' && !empty) return false;
-    if (state.activeFilter === 'changed' && !changed) return false;
-    if (state.activeFilter === 'unchanged' && changed) return false;
+    if (state.activeFilter === 'empty'     && !anyEmpty)   return false;
+    if (state.activeFilter === 'changed'   && !anyChanged) return false;
+    if (state.activeFilter === 'unchanged' && anyChanged)  return false;
 
-    // Search
+    // Search: match key path or any value across all files
     if (q) {
       const keyMatch = key.toLowerCase().includes(q);
-      const valMatch = String(current || '').toLowerCase().includes(q) ||
-                       String(original || '').toLowerCase().includes(q);
+      const valMatch = fileNames.some(f =>
+        String(flatCurrents[f]?.[key]  || '').toLowerCase().includes(q) ||
+        String(flatOriginals[f]?.[key] || '').toLowerCase().includes(q)
+      );
       if (!keyMatch && !valMatch) return false;
     }
 
     return true;
-  }).map(key => ({
-    key,
-    originalValue: originalFlat[key],
-    currentValue: currentFlat[key],
-    changed: String(currentFlat[key]) !== String(originalFlat[key]),
-    empty: !currentFlat[key] && currentFlat[key] !== 0,
-  }));
+  }).map(key => {
+    const values = {};
+    for (const fname of fileNames) {
+      const cur  = flatCurrents[fname]?.[key];
+      const orig = flatOriginals[fname]?.[key];
+      values[fname] = {
+        original: orig,
+        current:  cur,
+        changed:  String(cur) !== String(orig),
+        empty:    !cur && cur !== 0,
+      };
+    }
+    return { key, values };
+  });
 }
 
 /* ─── Event delegation ─────────────────────────────────────────────── */
@@ -192,24 +190,6 @@ document.addEventListener('click', (e) => {
     clearDraft();
     state.draft = null;
     renderLanding(false);
-    return;
-  }
-
-  // Editor: file tab
-  if (t.matches('[data-tab-file]') || t.closest('[data-tab-file]')) {
-    const el = t.matches('[data-tab-file]') ? t : t.closest('[data-tab-file]');
-    const fname = el.dataset.tabFile;
-    if (fname && fname !== state.currentFile) {
-      if (activeCell) closeCellEditor(true);
-      state.currentFile = fname;
-      state.searchQuery = '';
-      state.activeFilter = 'all';
-      renderEditorBody();
-      renderFileTabs();
-      renderProgressBar();
-      renderChangeCount();
-      updateColumnHeaders();
-    }
     return;
   }
 
@@ -285,8 +265,9 @@ document.addEventListener('click', (e) => {
   }
 
   // Copy to clipboard button
-  if (t.matches('#btn-copy-clipboard') || t.closest('#btn-copy-clipboard')) {
-    handleCopyToClipboard();
+  if (t.matches('[data-copy-file]') || t.closest('[data-copy-file]')) {
+    const el = t.matches('[data-copy-file]') ? t : t.closest('[data-copy-file]');
+    handleCopyToClipboard(el.dataset.copyFile || null);
     return;
   }
 
@@ -365,22 +346,15 @@ function handleDownloadAction(action) {
 
   const filenames = state.draft.metadata.fileNames;
 
-  if (action === 'current') {
-    const fname = state.currentFile;
-    const data = state.draft.files[fname]?.current;
-    if (data) {
-      downloadFile(fname, JSON.stringify(data, null, 2));
-      showToast(`Downloaded: ${fname}`, 'success');
-    }
-    return;
-  }
-
-  if (action === 'all') {
+  // action is either 'all' or a specific filename
+  if (action === 'all' || filenames.length === 1) {
     if (filenames.length === 1) {
       const fname = filenames[0];
       const data = state.draft.files[fname]?.current;
-      downloadFile(fname, JSON.stringify(data, null, 2));
-      showToast(`Downloaded: ${fname}`, 'success');
+      if (data) {
+        downloadFile(fname, JSON.stringify(data, null, 2));
+        showToast(`Downloaded: ${fname}`, 'success');
+      }
     } else {
       const filesMap = {};
       for (const fname of filenames) {
@@ -391,17 +365,25 @@ function handleDownloadAction(action) {
         showToast('Downloaded: translations.zip', 'success');
       });
     }
-    return;
+  } else {
+    // Download individual named file
+    const data = state.draft.files[action]?.current;
+    if (data) {
+      downloadFile(action, JSON.stringify(data, null, 2));
+      showToast(`Downloaded: ${action}`, 'success');
+    }
   }
 }
 
-async function handleCopyToClipboard() {
-  if (!state.draft || !state.currentFile) return;
-  const data = state.draft.files[state.currentFile]?.current;
+async function handleCopyToClipboard(filename) {
+  if (!state.draft) return;
+  // If specific file given, use that; otherwise use first file
+  const fname = filename || state.draft.metadata.fileNames[0];
+  const data = state.draft.files[fname]?.current;
   if (!data) return;
   try {
     await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-    showToast('Copied to clipboard!', 'success');
+    showToast(`Copied ${fname} to clipboard!`, 'success');
   } catch {
     showToast('Failed to copy to clipboard', 'error');
   }
@@ -411,34 +393,49 @@ async function handleCopyToClipboard() {
 /* ─── Diff helpers ─────────────────────────────────────────────────── */
 
 function copyDiffAsMarkdown() {
-  const changes = getDiffChanges();
-  if (changes.length === 0) {
+  const allChanges = getDiffChanges();
+  const total = allChanges.reduce((s, f) => s + f.changes.length, 0);
+  if (total === 0) {
     showToast('No changes to copy', 'info');
     return;
   }
   const lines = ['# Translation Diff\n'];
-  lines.push(`**File:** ${state.currentFile}`);
-  lines.push(`**Changes:** ${changes.length} keys\n`);
-  lines.push('| Key | Before | After |');
-  lines.push('|-----|--------|-------|');
-  for (const { key, oldVal, newVal } of changes) {
-    lines.push(`| \`${key}\` | ${oldVal || '_(empty)_'} | ${newVal || '_(empty)_'} |`);
+  for (const { filename, changes } of allChanges) {
+    if (changes.length === 0) continue;
+    lines.push(`## ${filename} (${changes.length} changes)\n`);
+    lines.push('| Key | Before | After |');
+    lines.push('|-----|--------|-------|');
+    for (const { key, oldVal, newVal } of changes) {
+      lines.push(`| \`${key}\` | ${oldVal || '_(empty)_'} | ${newVal || '_(empty)_'} |`);
+    }
+    lines.push('');
   }
   navigator.clipboard.writeText(lines.join('\n')).then(() => {
     showToast('Diff copied as Markdown', 'success');
   });
 }
 
+/**
+ * Returns [{filename, changes: [{key, oldVal, newVal, timestamp}]}] for all files.
+ */
 function getDiffChanges() {
-  if (!state.draft || !state.currentFile) return [];
-  const fileData = state.draft.files[state.currentFile];
-  if (!fileData) return [];
-  return fileData.changeLog.map(entry => ({
-    key: entry.key,
-    oldVal: entry.oldValue,
-    newVal: entry.newValue,
-    timestamp: entry.timestamp,
-  }));
+  if (!state.draft) return [];
+  return state.draft.metadata.fileNames.map(fname => {
+    const fileData = state.draft.files[fname];
+    return {
+      filename: fname,
+      changes: (fileData?.changeLog || []).map(entry => ({
+        key: entry.key,
+        oldVal: entry.oldValue,
+        newVal: entry.newValue,
+        timestamp: entry.timestamp,
+      })),
+    };
+  });
+}
+
+function getTotalDiffCount() {
+  return getDiffChanges().reduce((s, f) => s + f.changes.length, 0);
 }
 
 /* ─── Periodic UI ticks ────────────────────────────────────────────── */

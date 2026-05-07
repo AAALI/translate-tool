@@ -244,9 +244,11 @@ function refreshCell(filename, key, value) {
   const empty = !currentVal && currentVal !== 0;
   const rtl = isRTL(String(currentVal || '')) || isRTL(String(originalVal || ''));
 
-  cell.className = 'cell-target px-3 py-2 cursor-pointer transition-colors' +
-    (changed ? ' cell-changed' : '') +
-    (empty ? ' cell-empty' : '');
+  cell.className = [
+    'cell-target',
+    changed ? 'cell-changed' : '',
+    empty   ? 'cell-empty'   : '',
+  ].filter(Boolean).join(' ');
   cell.setAttribute('dir', rtl ? 'rtl' : 'ltr');
 
   const display = empty
@@ -259,17 +261,18 @@ function refreshCell(filename, key, value) {
 }
 
 /**
- * Navigate to the next/previous editable cell in the table.
+ * Navigate to the next/previous cell in the same file column.
  * @param {'up'|'down'} direction
  */
 function navigateCell(direction) {
-  const cells = Array.from(document.querySelectorAll('[data-cell-key]'));
+  if (!activeCell) return;
+  const { filename, key } = activeCell;
+
+  // Get all cells in the same file column, in DOM order
+  const cells = Array.from(document.querySelectorAll(`[data-cell-file="${CSS.escape(filename)}"]`));
   if (cells.length === 0) return;
 
-  // find currently focused or last active
-  const currentKey = document.querySelector('[data-cell-key].cell-editing')?.dataset?.cellKey;
-  const currentIdx = currentKey ? cells.findIndex(c => c.dataset.cellKey === currentKey) : -1;
-
+  const currentIdx = cells.findIndex(c => c.dataset.cellKey === key);
   let nextIdx = direction === 'down' ? currentIdx + 1 : currentIdx - 1;
   if (nextIdx < 0) nextIdx = cells.length - 1;
   if (nextIdx >= cells.length) nextIdx = 0;
