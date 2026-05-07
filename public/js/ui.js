@@ -346,11 +346,44 @@ function buildColgroup(fileNames) {
 
 function buildHeaderRow(fileNames) {
   const keyTh = `<th class="th-key">Key Path</th>`;
+  const n = fileNames.length;
   const fileThs = fileNames.map((fname, i) => {
-    const hint = i === fileNames.length - 1
+    const hint = i === n - 1
       ? ` <span class="th-edit-hint">← click to edit</span>`
       : '';
-    return `<th class="th-file">${escapeHTML(fname)}${hint}</th>`;
+    const canMoveLeft = i > 0;
+    const canMoveRight = i < n - 1;
+    const reorder = n > 1 ? `
+      <span class="th-reorder">
+        <button
+          class="th-move-btn"
+          data-move-file="${escapeHTML(fname)}"
+          data-move-dir="left"
+          ${canMoveLeft ? '' : 'disabled'}
+          title="Move column left"
+          aria-label="Move ${escapeHTML(fname)} left"
+        >◀</button>
+        <button
+          class="th-move-btn"
+          data-move-file="${escapeHTML(fname)}"
+          data-move-dir="right"
+          ${canMoveRight ? '' : 'disabled'}
+          title="Move column right"
+          aria-label="Move ${escapeHTML(fname)} right"
+        >▶</button>
+      </span>` : '';
+    const remove = n > 1 ? `
+      <button
+        class="th-remove-btn"
+        data-remove-file="${escapeHTML(fname)}"
+        title="Remove ${escapeHTML(fname)}"
+        aria-label="Remove ${escapeHTML(fname)}"
+      >×</button>` : '';
+    return `<th class="th-file"><div class="th-file-inner">
+      <span class="th-file-label">${escapeHTML(fname)}${hint}</span>
+      ${reorder}
+      ${remove}
+    </div></th>`;
   }).join('');
   return keyTh + fileThs;
 }

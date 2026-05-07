@@ -151,6 +151,72 @@ function addLanguageFile(filename) {
   showToast(`Added ${filename} — fill in the empty cells`, 'success');
 }
 
+/* ─── Reorder language columns ─────────────────────────────────────── */
+
+/**
+ * Move a file/language column left or right in the display order.
+ * @param {string} filename
+ * @param {'left'|'right'} direction
+ */
+function moveFileColumn(filename, direction) {
+  if (!state.draft) return;
+  const names = state.draft.metadata.fileNames;
+  const idx = names.indexOf(filename);
+  if (idx === -1) return;
+
+  const target = direction === 'left' ? idx - 1 : idx + 1;
+  if (target < 0 || target >= names.length) return;
+
+  [names[idx], names[target]] = [names[target], names[idx]];
+  state.draft.metadata.lastModifiedAt = new Date().toISOString();
+
+  const ok = saveDraft(state.draft);
+  if (!ok) return;
+  state.lastSavedAt = new Date().toISOString();
+
+  if (activeCell) closeCellEditor(true);
+  renderEditor();
+}
+
+/**
+ * Remove a language/file from the draft after user confirmation.
+ * @param {string} filename
+ */
+function removeFileColumn(filename) {
+  if (!state.draft) return;
+  const names = state.draft.metadata.fileNames;
+  if (!names.includes(filename)) return;
+  if (names.length <= 1) {
+    showToast('Cannot remove the last remaining language', 'warning');
+    return;
+  }
+
+  const fileData = state.draft.files[filename];
+  const editCount = fileData?.changeLog?.length || 0;
+  const detail = editCount > 0
+    ? `${filename} contains ${editCount} edit${editCount !== 1 ? 's' : ''}. This action cannot be undone — download it first if you want to keep your work.`
+    : `${filename} will be permanently removed from this draft. This action cannot be undone.`;
+
+  showConfirmDialog(
+    `Remove ${filename}?`,
+    detail,
+    () => {
+      const idx = state.draft.metadata.fileNames.indexOf(filename);
+      if (idx !== -1) state.draft.metadata.fileNames.splice(idx, 1);
+      delete state.draft.files[filename];
+      state.draft.metadata.lastModifiedAt = new Date().toISOString();
+
+      const ok = saveDraft(state.draft);
+      if (!ok) return;
+      state.lastSavedAt = new Date().toISOString();
+
+      if (activeCell) closeCellEditor(true);
+      renderEditor();
+      showToast(`Removed ${filename}`, 'success');
+    }
+  );
+}
+
 /* ─── Flat data helpers ────────────────────────────────────────────── */
 
 /**
@@ -254,6 +320,24 @@ document.addEventListener('click', (e) => {
     clearDraft();
     state.draft = null;
     renderLanding(false);
+    return;
+  }
+
+  // Editor: reorder language column
+  if (t.matches('[data-move-file]') || t.closest('[data-move-file]')) {
+    e.stopPropagation();
+    const el = t.matches('[data-move-file]') ? t : t.closest('[data-move-file]');
+    if (el.disabled) return;
+    moveFileColumn(el.dataset.moveFile, el.dataset.moveDir);
+    return;
+  }
+
+  // Editor: remove language column
+  if (t.matches('[data-remove-file]') || t.closest('[data-remove-file]')) {
+    e.stopPropagation();
+    const el = t.matches('[data-remove-file]') ? t : t.closest('[data-remove-file]');
+    if (activeCell) closeCellEditor(true);
+    removeFileColumn(el.dataset.removeFile);
     return;
   }
 
